@@ -1,0 +1,14 @@
+# really easy (0) <----> (10) very hard  <Integer 0-10>: 
+:Difficulty: 3
+
+# little (0)   <---->  (10) much more than 3 h <Integer 0-10>:
+:Time invested: 1
+
+# none (0)   <---->  (10) a lot  <Integer 0-10>:
+:Help received: 1
+
+# no idea (0)  <---->  (10) confident  <Integer 0-10>:
+:Understanding now: 3
+
+# Describe your impression of this task in one word!  <Word [a-z]{1,25}>:
+:In a word: time
