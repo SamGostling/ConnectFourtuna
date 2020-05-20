@@ -1,5 +1,16 @@
-#include "os.h"
+/*   Author: Samuel Gostling
+  *  Simple connect-4 game for LaFortuna Board
+  *  Currently can only play against another human, no computer option
+  *  License: Licenced under GNU GPLv3.0
+  *           License  attached in License.txt for reference
+*/
+#include <stdio.h>
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include "rios.h"
+#include "ruota.h"
 #include "color.h"
+#include "lcd.h"
 #include <util/delay.h>
 #define BOARD_COLOUMNS 7
 #define BOARD_ROWS 6
@@ -7,6 +18,7 @@
 #define PLAYER_2 2
 #define GAME_LOOP 1
 #define RESTART 0
+#define GAME_OVER -1
 
 const int BACKGROUND_COLOUR = BLACK;
 const int TEXT_COLOUR = WHITE;
@@ -15,6 +27,8 @@ const int PLAYER_2_COLOUR = YELLOW;
 const int BOARD_COLOUR = BLUE;
 const int BOARD_OUTLINE_COLOUR = BLACK;
 
+void init();
+void display_start_screen();
 void print_board();
 void draw_grid();
 void draw_information();
@@ -24,7 +38,7 @@ int check_switches(int);
 int change_position(int8_t changed, uint8_t max, int8_t move);
 void move_cursor(int8_t);
 void draw_square(uint8_t i, uint8_t j, uint16_t col_inside, uint16_t col_outside);
-void draw_token(uint8_t i, uint8_t j, int turn);
+void draw_token(int8_t i, int8_t j, int turn);
 void perform_action();
 int takeTurn(int coloumn);
 int check_board();
@@ -34,18 +48,13 @@ int8_t current_postition = 0;
 int board[BOARD_COLOUMNS][BOARD_ROWS] = {0};
 int8_t player = PLAYER_1;
 int8_t game_state = GAME_LOOP;
-//TODO
-//Start screen
-//End screen
-//press any button to continue?
-//readme file
-//put in license
-//aknowledge code used from others
-//arrow for dropping instead of highlight
+
 void main(void) {
 
-    os_init();
-
+    init();
+    display_start_screen();
+    
+    while(!get_switch_press(_BV(SWC)));
     display.background = BACKGROUND_COLOUR;
     display.foreground = TEXT_COLOUR;
     clear_screen();
@@ -53,8 +62,44 @@ void main(void) {
     os_add_task(check_switches ,100, 1);
     print_board();
     draw_information();
+    current_postition = 0;
+
     sei();
     for(;;){}
+}
+
+void init(){
+   /* 8MHz clock, no prescaling (DS, p. 48) */
+    CLKPR = (1 << CLKPCE);
+    CLKPR = 0;
+
+    DDRB  |=  _BV(PB7);  	 /* LED as output */
+
+    init_lcd();
+    os_init_scheduler();
+    os_init_ruota();
+}
+
+void display_start_screen() {
+                                                                                                                                           
+display_string("\n\n");                                                                                                                                         
+display_string("         _____                            _\n");   
+display_string("        / ____|                          | |\n");  
+display_string("       | |     ___  _ __  _ __   ___  ___| |_\n"); 
+display_string("       | |    / _ \\| '_ \\| '_ \\ / _ \\/ __| __|\n");
+display_string("       | |___| (_) | | | | | | |  __/ (__| |_ \n");
+display_string("        \\_____\\___/|_| |_|_| |_|\\___|\\___|\\__|\n");
+display_string("\n");
+display_string("      ______               _\n");                     
+display_string("     |  ____|             | |\n");                    
+display_string("     | |__ ___  _   _ _ __| |_ _   _ _ __   __ _\n"); 
+display_string("     |  __/ _ \\| | | | '__| __| | | | '_ \\ / _` |\n");
+display_string("     | | | (_) | |_| | |  | |_| |_| | | | | (_| |\n");
+display_string("     |_|  \\___/ \\__,_|_|   \\__|\\__,_|_| |_|\\__,_|\n\n\n");
+display_string("                USE <> TO MOVE CURSOR\n\n");
+display_string("           PRESS CENTRE BUTTON TO DROP TOKEN\n\n");
+display_string("            PRESS CENTRE BUTTON TO CONTINUE");
+                                                                                                                               
 }
 
 void print_board() {
@@ -62,7 +107,7 @@ void print_board() {
     //draw grid
     draw_grid();
     //draw cursor
-    draw_square(current_postition, 0, BOARD_OUTLINE_COLOUR, BOARD_COLOUR);
+    draw_token(current_postition, -1, player);
     //draw pieces
     for (j = 0; j < BOARD_ROWS; j++) {
       for (i = 0; i < BOARD_COLOUMNS; i++) {
@@ -91,12 +136,11 @@ void draw_information(){
   char val[2];
 	sprintf(val, "%d", player);
   display_string_xy(val, (LCDHEIGHT/2) -3, 10);
-  display_string_xy("USE <> TO MOVE CURSOR", (LCDHEIGHT/2) - 62, 30);
 }
 
 void hide_information() {
   display_string_xy("                   ", (LCDHEIGHT/2) - 50, 10);
-  display_string_xy("                       ", (LCDHEIGHT/2) - 62, 30);
+  draw_token(current_postition, -1, -1);
 }
 
 
@@ -160,13 +204,13 @@ void move_cursor(int8_t move) {
       changed = change_position(changed,max,move);;
     }
     if (changed == 1) {
-        draw_square(previous, 0, BOARD_COLOUR, BOARD_OUTLINE_COLOUR);
-        draw_square(current_postition, 0, BOARD_OUTLINE_COLOUR, BOARD_COLOUR);
+        draw_token(previous, -1, -1);
+        draw_token(current_postition, -1, player);
         draw_token(previous, 0, board[previous][0]);
         draw_token(current_postition, 0, board[current_postition][0]);
     }
   }
-  else
+  else if (game_state == RESTART)
   {
       rectangle rect_prev = {
             ((LCDHEIGHT/2)* (previous + 1)) - 103,
@@ -205,7 +249,7 @@ void draw_square(uint8_t i, uint8_t j, uint16_t col_inside, uint16_t col_outside
 }
 
 //draw a token that has been placed into the grid
-void draw_token(uint8_t i, uint8_t j, int turn) {
+void draw_token(int8_t i, int8_t j, int turn) {
     uint16_t x,y;
     x = 40 + (30 * (1 + i));
     y = 35 + (30 * (1 + j));
@@ -220,6 +264,10 @@ void draw_token(uint8_t i, uint8_t j, int turn) {
     else if (turn == 0)
     {
       draw_circle(x,y,WHITE, 10);
+    }
+    else if (turn == -1)
+    {
+      draw_circle(x,y,display.background, 10);
     }
     
 }
@@ -383,26 +431,49 @@ void perform_action() {
         char val[2];
 		    sprintf(val, "%d", player);
         display_string_xy(val, (LCDHEIGHT/2) -3, 10);
+        draw_token(current_postition, -1, player);
       }
     }
     else
     {
       //Set BOARD ELEMENTS BACK TO 0
-      int8_t i,j;
-      for (j = 0; j < BOARD_ROWS; j++) {
-        for (i = 0; i < BOARD_COLOUMNS; i++) {
-          if (board[i][j] != 0)
-          {
-            board[i][j] = 0;
+      if (current_postition == 0) {
+        int8_t i,j;
+        for (j = 0; j < BOARD_ROWS; j++) {
+          for (i = 0; i < BOARD_COLOUMNS; i++) {
+            if (board[i][j] != 0)
+            {
+              board[i][j] = 0;
+            }
           }
         }
+        clear_screen();
+        print_board();
+        current_postition = 0;
+        player = PLAYER_1;
+        game_state = GAME_LOOP;
+        draw_information();
       }
-      clear_screen();
-      print_board();
-      current_postition = 0;
-      player = PLAYER_1;
-      game_state = GAME_LOOP;
-      draw_information();
+      else {
+        clear_screen();
+        display_string("\n\n\n\n\n\n\n\n");
+        display_string("          _____              __  __   ______\n"); 
+        display_string("         / ____|     /\\     |  \\/  | |  ____|\n");
+        display_string("        | |  __     /  \\    | \\  / | | |__   \n");
+        display_string("        | | |_ |   / /\\ \\   | |\\/| | |  __|  \n");
+        display_string("        | |__| |  / ____ \\  | |  | | | |____ \n");
+        display_string("         \\_____| /_/    \\ \\ |_|  |_| |______|\n");
+        display_string("                                             \n");
+        display_string("                                             \n");
+        display_string("          ____   __      __  ______   _____  \n");
+        display_string("         / __ \\  \\ \\    / / |  ____| |  __ \\ \n");
+        display_string("        | |  | |  \\ \\  / /  | |__    | |__) |\n");
+        display_string("        | |  | |   \\ \\/ /   |  __|   |  _  / \n");
+        display_string("        | |__| |    \\  /    | |____  | | \\ \\ \n");
+        display_string("         \\____/      \\/     |______| |_|  \\_\\ \n");
+        display_string("                                             \n");
+        game_state = GAME_OVER;
+      }
     }
     
     sei();

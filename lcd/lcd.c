@@ -1,9 +1,13 @@
-/*  Author: Steve Gunn
- * Licence: This work is licensed under the Creative Commons Attribution License.
- *           View this license at http://creativecommons.org/about/licenses/
- *
- *  
- *  - Jan 2015  Modified for LaFortuna (Rev A, black edition) [KPZ]
+/* Author: Samuel Gostling
+ * License: This work is licenced under GNU GPLv3.0 - see the attached LICENSE.txt notice
+ * Adapted from Steve Gunn's lcd.c library with a few extra methods from a graphics library by Mathew Jones which has the following copyright notice:
+ *  |   La Fortuna Graphics Builder - Created by Matthew Jones (mj9g13) - May 10th 2016
+ *  |   
+ *  |     Original Author:    Steve Gunn
+ *  |             Licence:    This work is licensed under the Creative Commons Attribution License.
+ *  |                         View this license at http://creativecommons.org/about/licenses/
+ *  |             Modified by:    Matthew Jones
+ *  |             Modifications:    Added additional methods after 'EXTRA' comment
  */
 
 #include <avr/io.h>
